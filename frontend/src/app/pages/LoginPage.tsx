@@ -6,9 +6,9 @@ import { Label } from "../components/ui/label";
 import { Checkbox } from "../components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Alert, AlertDescription } from "../components/ui/alert";
-import { authenticateUser, setCurrentUser } from "../config/demoCredentials";
 import { useState } from "react";
 import { toast } from "sonner";
+import { apiLogin } from "../config/api";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -17,40 +17,47 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // Get the page user was trying to access
   const from = (location.state as { from?: string })?.from || null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
-    const user = authenticateUser(email, password);
+    try {
+      const result = await apiLogin({ email, password });
 
-    if (user) {
-      setCurrentUser(user);
-      toast.success(`Welcome back, ${user.name}!`);
+      if (result.success) {
+        localStorage.setItem("token", result.token);
+        localStorage.setItem("user", JSON.stringify(result.user));
 
-      // If user was trying to access a specific page, redirect there if role matches
-      if (from) {
-        navigate(from);
-      } else {
-        // Otherwise, route to appropriate dashboard based on role
-        switch (user.role) {
-          case 'admin':
-            navigate("/admin");
-            break;
-          case 'chef':
-            navigate("/chef");
-            break;
-          case 'user':
-          default:
-            navigate("/dashboard");
-            break;
+        toast.success(`Welcome back, ${result.user.name}!`);
+
+        if (from) {
+          navigate(from);
+        } else {
+          switch (result.user.role) {
+            case "admin":
+              navigate("/admin");
+              break;
+            case "chef":
+              navigate("/chef");
+              break;
+            case "user":
+            default:
+              navigate("/dashboard");
+              break;
+          }
         }
+      } else {
+        setError(result.message || "Invalid email or password.");
       }
-    } else {
-      setError("Invalid email or password. Please try again.");
+    } catch (err) {
+      setError("Could not connect to server. Make sure the backend is running.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -71,42 +78,6 @@ export function LoginPage() {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-
-            <Alert className="bg-blue-50 border-blue-200 text-blue-900">
-              <AlertDescription className="text-xs space-y-2">
-                <div><strong>Demo Credentials (Click to auto-fill):</strong></div>
-                <button
-                  type="button"
-                  className="block w-full text-left hover:bg-blue-100 p-1 rounded transition-colors"
-                  onClick={() => {
-                    setEmail("user@recipenest.com");
-                    setPassword("user123");
-                  }}
-                >
-                  👤 User: user@recipenest.com / user123
-                </button>
-                <button
-                  type="button"
-                  className="block w-full text-left hover:bg-blue-100 p-1 rounded transition-colors"
-                  onClick={() => {
-                    setEmail("chef@recipenest.com");
-                    setPassword("chef123");
-                  }}
-                >
-                  👨‍🍳 Chef: chef@recipenest.com / chef123
-                </button>
-                <button
-                  type="button"
-                  className="block w-full text-left hover:bg-blue-100 p-1 rounded transition-colors"
-                  onClick={() => {
-                    setEmail("admin@recipenest.com");
-                    setPassword("admin123");
-                  }}
-                >
-                  ⚙️ Admin: admin@recipenest.com / admin123
-                </button>
-              </AlertDescription>
-            </Alert>
 
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -159,8 +130,8 @@ export function LoginPage() {
               </Link>
             </div>
 
-            <Button type="submit" className="w-full">
-              Sign In
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Signing in..." : "Sign In"}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">

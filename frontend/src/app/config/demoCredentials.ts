@@ -1,48 +1,39 @@
+// This file bridges the old demo-based pages to the real backend auth.
+// Pages still import from here — but now they read the real logged-in user.
+
 export interface DemoUser {
   email: string;
   password: string;
   role: 'user' | 'chef' | 'admin';
   name: string;
+  _id?: string;
+  bio?: string;
+  profileImage?: string;
 }
 
-export const DEMO_CREDENTIALS: DemoUser[] = [
-  {
-    email: "user@recipenest.com",
-    password: "user123",
-    role: "user",
-    name: "John Doe"
-  },
-  {
-    email: "chef@recipenest.com",
-    password: "chef123",
-    role: "chef",
-    name: "Chef Maria Garcia"
-  },
-  {
-    email: "admin@recipenest.com",
-    password: "admin123",
-    role: "admin",
-    name: "Admin Sarah Johnson"
-  }
-];
+// No longer used for auth — kept so old imports don't break
+export const DEMO_CREDENTIALS: DemoUser[] = [];
 
-export function authenticateUser(email: string, password: string): DemoUser | null {
-  const user = DEMO_CREDENTIALS.find(
-    (u) => u.email === email && u.password === password
-  );
-  return user || null;
+export function authenticateUser(_email: string, _password: string): DemoUser | null {
+  return null;
 }
 
+// Reads the real user saved by LoginPage
 export function getCurrentUser(): DemoUser | null {
-  const userStr = localStorage.getItem('currentUser');
+  const userStr = localStorage.getItem('user');
   if (!userStr) return null;
-  return JSON.parse(userStr);
+  try {
+    return JSON.parse(userStr);
+  } catch {
+    return null;
+  }
 }
 
 export function setCurrentUser(user: DemoUser): void {
-  localStorage.setItem('currentUser', JSON.stringify(user));
+  localStorage.setItem('user', JSON.stringify(user));
 }
 
 export function logout(): void {
-  localStorage.removeItem('currentUser');
+  localStorage.removeItem('user');
+  localStorage.removeItem('token');
 }

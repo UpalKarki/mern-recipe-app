@@ -1,8 +1,11 @@
-// authRoutes.js — placeholder routes, filled in Phase 2
 const express = require('express');
 const router = express.Router();
+const { register, login, getMe, updateProfile } = require('../controllers/authController');
+const { protect } = require('../middleware/authMiddleware');
 
-// Temporary placeholder so server.js doesn't crash on require
-router.get('/', (req, res) => res.json({ message: 'Auth routes ready' }));
+router.post('/register', register);
+router.post('/login', login);
+router.get('/me', protect, getMe);
+router.put('/update-profile', protect, updateProfile);
 
 module.exports = router;
