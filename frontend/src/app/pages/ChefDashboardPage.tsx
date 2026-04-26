@@ -1,97 +1,77 @@
-import { BookOpen, Star, Bookmark, TrendingUp } from "lucide-react";
+import { Plus, BookOpen, Star, Clock } from "lucide-react";
+import { Link } from "react-router";
+import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { useRecipes } from "../hooks/useRecipes";
+import { useEffect, useState } from "react";
+import { apiGetMyRecipes } from "../config/api";
 import { getCurrentUser } from "../config/demoCredentials";
-import { getAllReviews, formatReviewDate } from "../utils/reviews";
-import { useMemo } from "react";
-import { Link } from "react-router";
+import { toast } from "sonner";
+
+interface Recipe {
+  _id: string;
+  title: string;
+  description: string;
+  category: string;
+  difficulty: string;
+  cookingTime: number;
+  status: string;
+  averageRating: number;
+  totalReviews: number;
+  createdAt: string;
+}
 
 export function ChefDashboardPage() {
   const currentUser = getCurrentUser();
-  const { recipes: allRecipes } = useRecipes();
-  const allReviews = getAllReviews();
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const myRecipes = useMemo(() => {
-    if (!currentUser) return [];
-    return allRecipes.filter(recipe => recipe.chef === currentUser.name);
-  }, [allRecipes, currentUser]);
+  useEffect(() => {
+    apiGetMyRecipes()
+      .then((res) => {
+        if (res.success) setRecipes(res.recipes);
+        else toast.error(res.message || "Failed to load recipes");
+      })
+      .catch(() => toast.error("Could not connect to server"))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const myRecipeIds = useMemo(() => {
-    return new Set(myRecipes.map(r => r.id));
-  }, [myRecipes]);
+  const approved = recipes.filter((r) => r.status === "approved").length;
+  const pending = recipes.filter((r) => r.status === "pending").length;
+  const avgRating = recipes.length
+    ? (recipes.reduce((sum, r) => sum + r.averageRating, 0) / recipes.length).toFixed(1)
+    : "0.0";
 
-  const myReviews = useMemo(() => {
-    return allReviews.filter(review => myRecipeIds.has(review.recipeId));
-  }, [allReviews, myRecipeIds]);
+  const statCards = [
+    { title: "Total Recipes", value: recipes.length, icon: BookOpen, desc: "All your recipes" },
+    { title: "Approved", value: approved, icon: Star, desc: "Live on platform" },
+    { title: "Pending", value: pending, icon: Clock, desc: "Awaiting review" },
+    { title: "Avg Rating", value: avgRating, icon: Star, desc: "Across all recipes" },
+  ];
 
-  const stats = useMemo(() => {
-    const totalRecipes = myRecipes.length;
-    const totalBookmarks = myRecipes.reduce((sum, recipe) => sum + recipe.bookmarks, 0);
-    const totalReviews = myReviews.length;
-    const avgRating = myRecipes.length > 0
-      ? (myRecipes.reduce((sum, recipe) => sum + recipe.rating, 0) / myRecipes.length).toFixed(1)
-      : "0.0";
+  const statusColor = (status: string) => {
+    if (status === "approved") return "default";
+    if (status === "rejected") return "destructive";
+    return "secondary";
+  };
 
-    return [
-      {
-        title: "Total Recipes",
-        value: totalRecipes.toString(),
-        icon: BookOpen,
-        change: "",
-      },
-      {
-        title: "Total Reviews",
-        value: totalReviews.toString(),
-        icon: Star,
-        change: "",
-      },
-      {
-        title: "Total Bookmarks",
-        value: totalBookmarks.toLocaleString(),
-        icon: Bookmark,
-        change: "",
-      },
-      {
-        title: "Avg. Rating",
-        value: avgRating,
-        icon: TrendingUp,
-        change: "",
-      },
-    ];
-  }, [myRecipes, myReviews]);
-
-  const recentActivity = useMemo(() => {
-    const recipeMap = new Map(myRecipes.map(r => [r.id, r.title]));
-
-    return myReviews
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 5)
-      .map((review, index) => ({
-        id: index,
-        type: "review",
-        recipe: recipeMap.get(review.recipeId) || "Unknown Recipe",
-        user: review.userName,
-        action: `left a ${review.rating}-star review`,
-        time: formatReviewDate(review.date),
-      }));
-  }, [myReviews, myRecipes]);
-
-  const topRecipes = useMemo(() => {
-    return [...myRecipes]
-      .sort((a, b) => b.bookmarks - a.bookmarks)
-      .slice(0, 3);
-  }, [myRecipes]);
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back! Here's an overview of your recipes.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Chef Dashboard</h1>
+          <p className="text-muted-foreground">Welcome back, {currentUser?.name}!</p>
+        </div>
+        <Button asChild>
+          <Link to="/chef/add-recipe">
+            <Plus className="h-4 w-4 mr-2" /> Add New Recipe
+          </Link>
+        </Button>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => {
+        {statCards.map((stat) => {
           const Icon = stat.icon;
           return (
             <Card key={stat.title}>
@@ -101,85 +81,63 @@ export function ChefDashboardPage() {
                     <Icon className="h-6 w-6 text-primary" />
                   </div>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">{stat.title}</p>
-                  <p className="text-2xl font-bold">{stat.value}</p>
-                </div>
+                <p className="text-sm text-muted-foreground mb-1">{stat.title}</p>
+                <p className="text-2xl font-bold">{stat.value}</p>
+                <p className="text-xs text-muted-foreground mt-1">{stat.desc}</p>
               </CardContent>
             </Card>
           );
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-          </CardHeader>
-          <CardContent>
+      {/* Recent Recipes */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>My Recipes</CardTitle>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/chef/manage-recipes">View All</Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <p className="text-muted-foreground text-sm">Loading your recipes...</p>
+          ) : recipes.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground mb-4">You haven't added any recipes yet.</p>
+              <Button asChild>
+                <Link to="/chef/add-recipe">
+                  <Plus className="h-4 w-4 mr-2" /> Add Your First Recipe
+                </Link>
+              </Button>
+            </div>
+          ) : (
             <div className="space-y-4">
-              {recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-start gap-4 pb-4 border-b border-border last:border-0 last:pb-0">
-                  <div className={`mt-1 p-2 rounded-lg ${activity.type === "review" ? "bg-accent/10" : "bg-primary/10"}`}>
-                    {activity.type === "review" ? (
-                      <Star className="h-4 w-4 text-accent" />
-                    ) : (
-                      <Bookmark className="h-4 w-4 text-primary" />
-                    )}
+              {recipes.slice(0, 5).map((recipe) => (
+                <div key={recipe._id}
+                  className="flex items-center justify-between pb-4 border-b border-border last:border-0 last:pb-0">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-medium">{recipe.title}</p>
+                      <Badge variant={statusColor(recipe.status)} className="capitalize text-xs">
+                        {recipe.status}
+                      </Badge>
+                    </div>
+                    <div className="flex gap-3 text-xs text-muted-foreground">
+                      <span>{recipe.category}</span>
+                      <span>{recipe.difficulty}</span>
+                      <span>{recipe.cookingTime} mins</span>
+                      <span>⭐ {recipe.averageRating} ({recipe.totalReviews} reviews)</span>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm">
-                      <span className="font-medium">{activity.user}</span> {activity.action}
-                    </p>
-                    <p className="text-sm text-primary font-medium truncate">{activity.recipe}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{activity.time}</p>
+                  <div className="text-right text-xs text-muted-foreground">
+                    {new Date(recipe.createdAt).toLocaleDateString()}
                   </div>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Top Recipes */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Performing Recipes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {topRecipes.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No recipes yet. Add your first recipe to see it here!
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {topRecipes.map((recipe, index) => (
-                  <div key={recipe.id} className="flex items-start gap-4 pb-4 border-b border-border last:border-0 last:pb-0">
-                    <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-primary text-primary-foreground font-bold">
-                      #{index + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <Link to={`/chef/recipes/${recipe.id}`}>
-                        <h4 className="font-medium truncate hover:text-primary transition-colors">{recipe.title}</h4>
-                      </Link>
-                      <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Bookmark className="h-3 w-3" />
-                          {recipe.bookmarks} saves
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Star className="h-3 w-3 fill-accent text-accent" />
-                          {recipe.rating}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

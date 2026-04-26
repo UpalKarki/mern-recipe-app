@@ -1,257 +1,161 @@
 import { Check, X, Eye } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { Textarea } from "../components/ui/textarea";
-import { Label } from "../components/ui/label";
+import { useEffect, useState } from "react";
+import { apiGetAllRecipes, apiUpdateRecipeStatus, apiAdminDeleteRecipe } from "../config/api";
 import { toast } from "sonner";
-import { useState } from "react";
 
-const initialRecipes = [
-  {
-    id: 1,
-    title: "Fresh Garden Salad Bowl",
-    chef: "Sarah Green",
-    category: "Vegetarian",
-    submittedDate: "2025-02-28",
-    status: "pending" as const,
-  },
-  {
-    id: 2,
-    title: "Spicy Thai Curry",
-    chef: "Yuki Tanaka",
-    category: "Asian",
-    submittedDate: "2025-02-27",
-    status: "pending" as const,
-  },
-  {
-    id: 3,
-    title: "Homemade Ravioli",
-    chef: "Giovanni Russo",
-    category: "Italian",
-    submittedDate: "2025-02-26",
-    status: "pending" as const,
-  },
-  {
-    id: 4,
-    title: "Moroccan Tagine",
-    chef: "Ahmed Hassan",
-    category: "Mediterranean",
-    submittedDate: "2025-02-25",
-    status: "pending" as const,
-  },
-  {
-    id: 5,
-    title: "Strawberry Cheesecake",
-    chef: "Emily Baker",
-    category: "Desserts",
-    submittedDate: "2025-02-24",
-    status: "pending" as const,
-  },
-];
+interface Recipe {
+  _id: string;
+  title: string;
+  description: string;
+  category: string;
+  difficulty: string;
+  cookingTime: number;
+  status: string;
+  chef: { _id: string; name: string; email: string };
+  createdAt: string;
+}
 
 export function ApproveRecipesPage() {
-  const [recipes, setRecipes] = useState(initialRecipes);
-  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
-  const [selectedRecipe, setSelectedRecipe] = useState<{ id: number; title: string } | null>(null);
-  const [rejectionReason, setRejectionReason] = useState("");
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
+  const [loading, setLoading] = useState(true);
 
-  const handleApprove = (id: number, title: string) => {
-    setRecipes(recipes.map(recipe => 
-      recipe.id === id ? { ...recipe, status: "approved" as const } : recipe
-    ));
-    toast.success(`"${title}" has been approved!`, {
-      description: "The recipe is now visible to all users.",
-    });
-  };
-
-  const openRejectDialog = (id: number, title: string) => {
-    setSelectedRecipe({ id, title });
-    setRejectDialogOpen(true);
-    setRejectionReason("");
-  };
-
-  const handleReject = () => {
-    if (!selectedRecipe) return;
-    
-    if (!rejectionReason.trim()) {
-      toast.error("Please provide a rejection reason");
-      return;
+  const fetchRecipes = async () => {
+    setLoading(true);
+    try {
+      const res = await apiGetAllRecipes(filter === "all" ? undefined : filter);
+      if (res.success) setRecipes(res.recipes);
+    } catch {
+      toast.error("Failed to fetch recipes");
+    } finally {
+      setLoading(false);
     }
-
-    setRecipes(recipes.map(recipe => 
-      recipe.id === selectedRecipe.id ? { ...recipe, status: "rejected" as const } : recipe
-    ));
-    
-    toast.error(`"${selectedRecipe.title}" has been rejected.`, {
-      description: `Chef will be notified: ${rejectionReason}`,
-    });
-    
-    setRejectDialogOpen(false);
-    setSelectedRecipe(null);
-    setRejectionReason("");
   };
 
-  const pendingRecipes = recipes.filter(r => r.status === "pending");
-  const processedRecipes = recipes.filter(r => r.status !== "pending");
+  useEffect(() => { fetchRecipes(); }, [filter]);
+
+  const handleStatus = async (id: string, status: "approved" | "rejected") => {
+    try {
+      const res = await apiUpdateRecipeStatus(id, status);
+      if (res.success) {
+        toast.success(`Recipe ${status}`);
+        fetchRecipes();
+      } else {
+        toast.error(res.message);
+      }
+    } catch {
+      toast.error("Failed to update status");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this recipe?")) return;
+    try {
+      const res = await apiAdminDeleteRecipe(id);
+      if (res.success) {
+        toast.success("Recipe deleted");
+        fetchRecipes();
+      }
+    } catch {
+      toast.error("Failed to delete recipe");
+    }
+  };
+
+  const statusColor = (status: string) => {
+    if (status === "approved") return "default";
+    if (status === "rejected") return "destructive";
+    return "secondary";
+  };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold mb-2">Approve Recipes</h1>
-        <p className="text-muted-foreground">Review and approve recipes submitted by chefs</p>
+        <h1 className="text-3xl font-bold mb-2">Manage Recipes</h1>
+        <p className="text-muted-foreground">Approve or reject chef-submitted recipes</p>
       </div>
 
-      {/* Pending Recipes */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Pending Approval ({pendingRecipes.length})</CardTitle>
-            {pendingRecipes.length > 0 && (
-              <Badge variant="destructive">{pendingRecipes.length} pending</Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {pendingRecipes.length === 0 ? (
-            <div className="text-center py-12">
-              <Check className="h-12 w-12 mx-auto text-primary mb-4" />
-              <p className="text-lg font-medium mb-2">All caught up!</p>
-              <p className="text-sm text-muted-foreground">No pending recipes to review</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Recipe</TableHead>
-                    <TableHead>Chef</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Submitted</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pendingRecipes.map((recipe) => (
-                    <TableRow key={recipe.id}>
-                      <TableCell className="font-medium">{recipe.title}</TableCell>
-                      <TableCell>{recipe.chef}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{recipe.category}</Badge>
-                      </TableCell>
-                      <TableCell>{new Date(recipe.submittedDate).toLocaleDateString()}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button variant="ghost" size="icon" title="View Details">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => handleApprove(recipe.id, recipe.title)}
-                          >
-                            <Check className="h-4 w-4 mr-1" />
-                            Approve
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => openRejectDialog(recipe.id, recipe.title)}
-                          >
-                            <X className="h-4 w-4 mr-1" />
-                            Reject
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Filter Tabs */}
+      <div className="flex gap-2 flex-wrap">
+        {(["pending", "approved", "rejected", "all"] as const).map((f) => (
+          <Button
+            key={f}
+            variant={filter === f ? "default" : "outline"}
+            size="sm"
+            onClick={() => setFilter(f)}
+            className="capitalize"
+          >
+            {f}
+          </Button>
+        ))}
+      </div>
 
-      {/* Recently Processed */}
-      {processedRecipes.length > 0 && (
+      {loading ? (
+        <p className="text-muted-foreground">Loading recipes...</p>
+      ) : recipes.length === 0 ? (
         <Card>
-          <CardHeader>
-            <CardTitle>Recently Processed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Recipe</TableHead>
-                    <TableHead>Chef</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {processedRecipes.map((recipe) => (
-                    <TableRow key={recipe.id}>
-                      <TableCell className="font-medium">{recipe.title}</TableCell>
-                      <TableCell>{recipe.chef}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{recipe.category}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={recipe.status === "approved" ? "default" : "destructive"}
-                        >
-                          {recipe.status === "approved" ? "Approved" : "Rejected"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{new Date(recipe.submittedDate).toLocaleDateString()}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            No {filter === "all" ? "" : filter} recipes found.
           </CardContent>
         </Card>
-      )}
+      ) : (
+        <div className="space-y-4">
+          {recipes.map((recipe) => (
+            <Card key={recipe._id}>
+              <CardContent className="p-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-1">
+                      <h3 className="font-semibold text-lg">{recipe.title}</h3>
+                      <Badge variant={statusColor(recipe.status)} className="capitalize">
+                        {recipe.status}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{recipe.description}</p>
+                    <div className="flex gap-4 text-xs text-muted-foreground">
+                      <span>Chef: <strong>{recipe.chef?.name || "Unknown"}</strong></span>
+                      <span>Category: {recipe.category}</span>
+                      <span>Difficulty: {recipe.difficulty}</span>
+                      <span>Time: {recipe.cookingTime} mins</span>
+                      <span>Submitted: {new Date(recipe.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
 
-      {/* Reject Dialog */}
-      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reject Recipe</DialogTitle>
-            <DialogDescription>
-              Please provide a reason for rejecting &quot;{selectedRecipe?.title}&quot;.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="rejectionReason">Reason for Rejection *</Label>
-            <Textarea
-              id="rejectionReason"
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="Enter rejection reason..."
-              rows={4}
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setRejectDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleReject}
-            >
-              Reject
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                  <div className="flex gap-2 flex-shrink-0">
+                    {recipe.status === "pending" && (
+                      <>
+                        <Button size="sm" onClick={() => handleStatus(recipe._id, "approved")}
+                          className="bg-green-600 hover:bg-green-700 text-white">
+                          <Check className="h-4 w-4 mr-1" /> Approve
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleStatus(recipe._id, "rejected")}>
+                          <X className="h-4 w-4 mr-1" /> Reject
+                        </Button>
+                      </>
+                    )}
+                    {recipe.status === "approved" && (
+                      <Button size="sm" variant="destructive" onClick={() => handleStatus(recipe._id, "rejected")}>
+                        <X className="h-4 w-4 mr-1" /> Revoke
+                      </Button>
+                    )}
+                    {recipe.status === "rejected" && (
+                      <Button size="sm" onClick={() => handleStatus(recipe._id, "approved")}
+                        className="bg-green-600 hover:bg-green-700 text-white">
+                        <Check className="h-4 w-4 mr-1" /> Approve
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => handleDelete(recipe._id)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

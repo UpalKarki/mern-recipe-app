@@ -15,31 +15,45 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../components/ui/alert-dialog";
-import { useRecipes } from "../hooks/useRecipes";
-import { getCurrentUser } from "../config/demoCredentials";
-import { deleteRecipe } from "../utils/recipesData";
+import { useEffect, useState } from "react";
+import { apiGetMyRecipes, apiDeleteRecipe } from "../config/api";
 import { toast } from "sonner";
-import { useMemo } from "react";
 
 export function ManageRecipesPage() {
-  const currentUser = getCurrentUser();
-  const { recipes: allRecipes, refreshRecipes } = useRecipes();
+  // ── REAL API STATE ─────────────────────────────────────────────────────────
+  const [recipes, setRecipes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const myRecipes = useMemo(() => {
-    if (!currentUser) return [];
-    return allRecipes.filter(recipe => recipe.chef === currentUser.name);
-  }, [allRecipes, currentUser]);
+  const fetchRecipes = async () => {
+    try {
+      const res = await apiGetMyRecipes();
+      if (res.success) setRecipes(res.recipes);
+    } catch {
+      toast.error("Could not connect to server");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleDelete = (recipeId: number, recipeTitle: string) => {
-    const success = deleteRecipe(recipeId);
-    if (success) {
-      toast.success(`"${recipeTitle}" has been deleted`);
-      refreshRecipes();
-    } else {
+  useEffect(() => { fetchRecipes(); }, []);
+
+  const handleDelete = async (id: string, title: string) => {
+    try {
+      const res = await apiDeleteRecipe(id);
+      if (res.success) {
+        toast.success(`"${title}" has been deleted`);
+        fetchRecipes();
+      } else {
+        toast.error(res.message || "Failed to delete recipe");
+      }
+    } catch {
       toast.error("Failed to delete recipe");
     }
   };
+  // ──────────────────────────────────────────────────────────────────────────
+
   return (
+    // IDENTICAL JSX to the original — only data source changed
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -53,10 +67,14 @@ export function ManageRecipesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>All Recipes ({myRecipes.length})</CardTitle>
+          <CardTitle>All Recipes ({loading ? "..." : recipes.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {myRecipes.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">Loading recipes...</p>
+            </div>
+          ) : recipes.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-muted-foreground mb-4">
                 You haven't added any recipes yet.
@@ -72,30 +90,48 @@ export function ManageRecipesPage() {
                   <TableRow>
                     <TableHead>Recipe</TableHead>
                     <TableHead>Category</TableHead>
-                    <TableHead className="text-center">Saves</TableHead>
+                    {/* Status column added — useful with real data */}
+                    <TableHead>Status</TableHead>
                     <TableHead className="text-center">Rating</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {myRecipes.map((recipe) => (
-                    <TableRow key={recipe.id}>
+                  {recipes.map((recipe) => (
+                    <TableRow key={recipe._id}>
                       <TableCell className="font-medium">{recipe.title}</TableCell>
                       <TableCell>{recipe.category}</TableCell>
-                      <TableCell className="text-center">{recipe.bookmarks}</TableCell>
-                      <TableCell className="text-center">{recipe.rating}</TableCell>
+                      <TableCell>
+                        {/* Status badge — shows pending/approved/rejected */}
+                        <Badge
+                          variant={
+                            recipe.status === "approved" ? "default"
+                            : recipe.status === "rejected" ? "destructive"
+                            : "secondary"
+                          }
+                          className="capitalize"
+                        >
+                          {recipe.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        ⭐ {recipe.averageRating} ({recipe.totalReviews})
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <Link to={`/recipes/${recipe.id}`}>
+                          {/* View — goes to chef recipe detail */}
+                          <Link to={`/chef/recipes/${recipe._id}`}>
                             <Button variant="ghost" size="icon" title="View">
                               <Eye className="h-4 w-4" />
                             </Button>
                           </Link>
-                          <Link to={`/chef/edit-recipe/${recipe.id}`}>
+                          {/* Edit */}
+                          <Link to={`/chef/edit-recipe/${recipe._id}`}>
                             <Button variant="ghost" size="icon" title="Edit">
                               <Edit className="h-4 w-4" />
                             </Button>
                           </Link>
+                          {/* Delete with confirmation dialog */}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button variant="ghost" size="icon" title="Delete">
@@ -113,7 +149,7 @@ export function ManageRecipesPage() {
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
                                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  onClick={() => handleDelete(recipe.id, recipe.title)}
+                                  onClick={() => handleDelete(recipe._id, recipe.title)}
                                 >
                                   Delete
                                 </AlertDialogAction>

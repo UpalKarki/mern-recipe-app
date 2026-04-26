@@ -6,84 +6,77 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { Label } from "../components/ui/label";
-import { getCurrentUser } from "../config/demoCredentials";
-import { getUserProfile, updateUserProfile } from "../utils/userProfile";
+import { getCurrentUser, setCurrentUser } from "../config/demoCredentials";
 import { useState, useEffect, useMemo } from "react";
-import { useRecipes } from "../hooks/useRecipes";
-import { getAllReviews } from "../utils/reviews";
+import { apiGetMyRecipes, apiUpdateProfile } from "../config/api";
 import { toast } from "sonner";
 
 export function ChefProfilePage() {
   const currentUser = getCurrentUser();
-  const { recipes: allRecipes } = useRecipes();
-  const allReviews = getAllReviews();
+
+  // ── REAL API STATE ─────────────────────────────────────────────────────────
+  const [recipes, setRecipes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch chef's real recipes from backend
+  useEffect(() => {
+    apiGetMyRecipes()
+      .then((res) => { if (res.success) setRecipes(res.recipes); })
+      .finally(() => setLoading(false));
+  }, []);
+  // ──────────────────────────────────────────────────────────────────────────
 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editBio, setEditBio] = useState("");
-  const [userBio, setUserBio] = useState("");
+  const [editBio, setEditBio] = useState(currentUser?.bio || "");
 
-  // Load user profile
-  useEffect(() => {
-    if (currentUser) {
-      const profile = getUserProfile(currentUser.email);
-      const bio = profile?.bio || "Passionate chef sharing delicious recipes with the world.";
-      setUserBio(bio);
-      setEditBio(bio);
-    }
-  }, [currentUser]);
-
-  // Calculate chef statistics
-  const myRecipes = useMemo(() => {
-    if (!currentUser) return [];
-    return allRecipes.filter(recipe => recipe.chef === currentUser.name);
-  }, [allRecipes, currentUser]);
-
-  const myRecipeIds = useMemo(() => {
-    return new Set(myRecipes.map(r => r.id));
-  }, [myRecipes]);
-
-  const myReviews = useMemo(() => {
-    return allReviews.filter(review => myRecipeIds.has(review.recipeId));
-  }, [allReviews, myRecipeIds]);
-
-  const totalBookmarks = useMemo(() => {
-    return myRecipes.reduce((sum, recipe) => sum + recipe.bookmarks, 0);
-  }, [myRecipes]);
+  // Compute stats from real recipe data
+  const totalReviews = useMemo(() =>
+    recipes.reduce((sum, r) => sum + (r.totalReviews || 0), 0), [recipes]);
 
   const avgRating = useMemo(() => {
-    if (myRecipes.length === 0) return "0.0";
-    return (myRecipes.reduce((sum, recipe) => sum + recipe.rating, 0) / myRecipes.length).toFixed(1);
-  }, [myRecipes]);
+    if (recipes.length === 0) return "0.0";
+    const rated = recipes.filter(r => r.averageRating > 0);
+    if (rated.length === 0) return "0.0";
+    return (rated.reduce((sum, r) => sum + r.averageRating, 0) / rated.length).toFixed(1);
+  }, [recipes]);
 
-  const handleSaveProfile = () => {
-    if (!currentUser) return;
+  // Total saves is not directly available from getMyRecipes — use totalReviews as proxy
+  // We keep the same 4-stat card layout, replacing "bookmarks" with totalReviews
+  const totalSaves = useMemo(() =>
+    recipes.reduce((sum, r) => sum + (r.bookmarks || 0), 0), [recipes]);
 
-    const success = updateUserProfile(currentUser.email, editBio);
-    if (success) {
-      setUserBio(editBio);
-      setIsEditDialogOpen(false);
-      toast.success("Profile updated successfully!");
-    } else {
-      toast.error("Failed to update profile");
+  const handleSaveProfile = async () => {
+    try {
+      const res = await apiUpdateProfile({ bio: editBio });
+      if (res.success) {
+        const updated = { ...currentUser, bio: editBio };
+        setCurrentUser(updated as any);
+        setIsEditDialogOpen(false);
+        toast.success("Profile updated successfully!");
+      } else {
+        toast.error(res.message || "Failed to update profile");
+      }
+    } catch {
+      toast.error("Could not connect to server");
     }
   };
 
   const userData = {
     name: currentUser?.name || "Chef",
     email: currentUser?.email || "",
-    bio: userBio,
+    bio: currentUser?.bio || "Passionate chef sharing delicious recipes with the world.",
     joinedDate: "January 2026",
     stats: {
-      recipes: myRecipes.length,
-      reviews: myReviews.length,
-      bookmarks: totalBookmarks,
-      avgRating: avgRating,
+      recipes: loading ? "..." : recipes.length,
+      avgRating: loading ? "..." : avgRating,
+      reviews: loading ? "..." : totalReviews,
+      bookmarks: loading ? "..." : totalSaves,
     },
   };
 
   return (
     <div className="max-w-4xl mx-auto">
-      {/* Profile Header */}
+      {/* Profile Header — IDENTICAL to original */}
       <Card className="mb-8">
         <CardContent className="p-8">
           <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
@@ -108,7 +101,7 @@ export function ChefProfilePage() {
               </div>
             </div>
 
-            <Button onClick={() => setIsEditDialogOpen(true)}>
+            <Button onClick={() => { setEditBio(currentUser?.bio || ""); setIsEditDialogOpen(true); }}>
               <Settings className="h-4 w-4 mr-2" />
               Edit Profile
             </Button>
@@ -116,7 +109,7 @@ export function ChefProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Stats Grid */}
+      {/* Stats Grid — IDENTICAL 4-card layout, real numbers */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-6 text-center">
@@ -175,7 +168,7 @@ export function ChefProfilePage() {
         </Card>
       </div>
 
-      {/* Edit Profile Dialog */}
+      {/* Edit Profile Dialog — IDENTICAL layout, real save via API */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>

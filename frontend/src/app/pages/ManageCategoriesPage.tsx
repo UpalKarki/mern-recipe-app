@@ -25,21 +25,45 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../components/ui/alert-dialog";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { apiGetRecipes } from "../config/api";
 
-const initialCategories = [
-  { id: 1, name: "Italian", recipeCount: 120, icon: "🍝" },
-  { id: 2, name: "Asian", recipeCount: 95, icon: "🍜" },
-  { id: 3, name: "Mexican", recipeCount: 78, icon: "🌮" },
-  { id: 4, name: "Desserts", recipeCount: 110, icon: "🍰" },
-  { id: 5, name: "Vegetarian", recipeCount: 86, icon: "🥗" },
-  { id: 6, name: "Seafood", recipeCount: 64, icon: "🦐" },
-  { id: 7, name: "Meat", recipeCount: 73, icon: "🥩" },
+// Fixed category list — these are the platform categories
+// The only thing that changes is the recipe count, which comes from the real API
+const PLATFORM_CATEGORIES = [
+  { id: 1, name: "Italian", icon: "🍝" },
+  { id: 2, name: "Asian", icon: "🍜" },
+  { id: 3, name: "Mexican", icon: "🌮" },
+  { id: 4, name: "Desserts", icon: "🍰" },
+  { id: 5, name: "Vegetarian", icon: "🥗" },
+  { id: 6, name: "Seafood", icon: "🦐" },
+  { id: 7, name: "Meat", icon: "🥩" },
 ];
 
 export function ManageCategoriesPage() {
-  const [categories, setCategories] = useState(initialCategories);
+  // ── REAL API STATE ─────────────────────────────────────────────────────────
+  // Fetch real approved recipes to compute accurate per-category counts
+  const [approvedRecipes, setApprovedRecipes] = useState<any[]>([]);
+  const [loadingCounts, setLoadingCounts] = useState(true);
+
+  useEffect(() => {
+    apiGetRecipes()
+      .then((res) => { if (res.success) setApprovedRecipes(res.recipes); })
+      .finally(() => setLoadingCounts(false));
+  }, []);
+
+  // Returns the real count of approved recipes in a given category
+  const getRealCount = (categoryName: string) =>
+    approvedRecipes.filter(
+      (r) => r.category.toLowerCase() === categoryName.toLowerCase()
+    ).length;
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Local UI state — IDENTICAL to original
+  const [categories, setCategories] = useState(
+    PLATFORM_CATEGORIES.map((c) => ({ ...c, recipeCount: 0 }))
+  );
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newCategory, setNewCategory] = useState({ name: "", icon: "" });
   const [editingCategory, setEditingCategory] = useState<{ id: number; name: string; icon: string } | null>(null);
@@ -61,8 +85,8 @@ export function ManageCategoriesPage() {
 
   const handleEditCategory = () => {
     if (editingCategory) {
-      setCategories(categories.map(cat => 
-        cat.id === editingCategory.id 
+      setCategories(categories.map(cat =>
+        cat.id === editingCategory.id
           ? { ...cat, name: editingCategory.name, icon: editingCategory.icon }
           : cat
       ));
@@ -77,6 +101,7 @@ export function ManageCategoriesPage() {
   };
 
   return (
+    // IDENTICAL JSX to original — only recipeCount source changed
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
@@ -148,7 +173,10 @@ export function ManageCategoriesPage() {
                     <TableCell className="text-2xl">{category.icon}</TableCell>
                     <TableCell className="font-medium">{category.name}</TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="secondary">{category.recipeCount} recipes</Badge>
+                      {/* Real count from API instead of hardcoded number */}
+                      <Badge variant="secondary">
+                        {loadingCounts ? "..." : getRealCount(category.name)} recipes
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -211,8 +239,8 @@ export function ManageCategoriesPage() {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Delete Category</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Are you sure you want to delete the "{category.name}" category? 
-                                This will affect {category.recipeCount} recipes.
+                                Are you sure you want to delete the "{category.name}" category?
+                                This will affect {loadingCounts ? "..." : getRealCount(category.name)} recipes.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>

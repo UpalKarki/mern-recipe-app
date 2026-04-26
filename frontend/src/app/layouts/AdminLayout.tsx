@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate, Navigate } from "react-router";
-import { Shield, LayoutDashboard, CheckCircle, FolderOpen, LogOut, Menu, X, Users } from "lucide-react";
+import { ChefHat, LayoutDashboard, CheckCircle, FolderOpen, LogOut, Menu, X, Users } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useState, useEffect } from "react";
 import { logout, getCurrentUser } from "../config/demoCredentials";
@@ -57,7 +57,7 @@ export function AdminLayout() {
         <div className="p-6 border-b border-sidebar-border">
           <Link to="/" className="flex items-center gap-2">
             <div className="bg-primary text-primary-foreground p-2 rounded-lg">
-              <Shield className="h-6 w-6" />
+              <ChefHat className="h-6 w-6" />
             </div>
             <div>
               <span className="text-lg font-semibold block">RecipeNest</span>
@@ -112,7 +112,7 @@ export function AdminLayout() {
             <div className="p-6 border-b border-sidebar-border flex items-center justify-between">
               <Link to="/" className="flex items-center gap-2">
                 <div className="bg-primary text-primary-foreground p-2 rounded-lg">
-                  <Shield className="h-6 w-6" />
+                  <ChefHat className="h-6 w-6" />
                 </div>
                 <div>
                   <span className="text-lg font-semibold block">RecipeNest</span>
