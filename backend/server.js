@@ -14,7 +14,8 @@ const app = express();
 
 // Middleware: allow JSON bodies and cross-origin requests from React frontend
 app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Route imports — we'll fill these in Phase 2 & 3
 const authRoutes = require('./routes/authRoutes');

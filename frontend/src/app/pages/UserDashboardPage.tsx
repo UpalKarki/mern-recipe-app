@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router";
-import { Search, Clock, ChefHat, Star, Bookmark, Heart, BookmarkCheck } from "lucide-react";
+import { Search, Clock, ChefHat, Star, Bookmark, Heart, BookmarkCheck, X } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Card, CardContent } from "../components/ui/card";
@@ -8,7 +8,7 @@ import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import { getCurrentUser } from "../config/demoCredentials";
 import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
-import { apiGetMyBookmarks, apiGetRecipes, apiToggleBookmark } from "../config/api";
+import { apiGetMyBookmarks, apiGetRecipes, apiToggleBookmark, apiGetMyReviews } from "../config/api";
 
 const categories = [
   { name: "Italian", icon: "🍝" },
@@ -26,16 +26,19 @@ export function UserDashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [bookmarks, setBookmarks] = useState<any[]>([]);
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
+  const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([apiGetRecipes(), apiGetMyBookmarks()])
-      .then(([recRes, bmRes]) => {
+    Promise.all([apiGetRecipes(), apiGetMyBookmarks(), apiGetMyReviews()])
+      .then(([recRes, bmRes, rvRes]) => {
         if (recRes.success) setAllRecipes(recRes.recipes);
         if (bmRes.success) {
           setBookmarks(bmRes.bookmarks);
           setBookmarkedIds(new Set(bmRes.bookmarks.map((bm: any) => bm.recipe?._id)));
         }
+        if (rvRes.success) setReviews(rvRes.reviews);
       })
       .catch(() => toast.error("Could not connect to server"))
       .finally(() => setLoading(false));
@@ -51,14 +54,17 @@ export function UserDashboardPage() {
   };
 
   const handleCategoryClick = (categoryName: string) => {
-    navigate(`/recipes?category=${encodeURIComponent(categoryName)}`);
+    // Toggle — click same category again to deselect
+    setSelectedCategory(prev => prev === categoryName ? null : categoryName);
+    setTimeout(() => {
+      document.getElementById("recipes-section")?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
   };
 
   const handleToggleBookmark = async (recipe: any, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (!currentUser) { toast.error("Login to bookmark recipes"); return; }
-
     try {
       const res = await apiToggleBookmark(recipe._id);
       if (res.success) {
@@ -83,7 +89,13 @@ export function UserDashboardPage() {
     return counts;
   }, [allRecipes]);
 
-  const recommendedRecipes = allRecipes.slice(0, 6);
+  // Filter by selected category, or show first 6 if none selected
+  const displayedRecipes = useMemo(() => {
+    if (selectedCategory) {
+      return allRecipes.filter(r => r.category === selectedCategory);
+    }
+    return allRecipes.slice(0, 6);
+  }, [allRecipes, selectedCategory]);
 
   return (
     <div>
@@ -137,7 +149,7 @@ export function UserDashboardPage() {
                       </div>
                       <div className="text-left">
                         <p className="text-sm text-muted-foreground">Reviews</p>
-                        <p className="text-2xl font-bold">0</p>
+                        <p className="text-2xl font-bold">{loading ? "..." : reviews.length}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -156,7 +168,9 @@ export function UserDashboardPage() {
             {categories.map((category) => (
               <Card
                 key={category.name}
-                className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer"
+                className={`hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer ${
+                  selectedCategory === category.name ? "ring-2 ring-primary shadow-lg" : ""
+                }`}
                 onClick={() => handleCategoryClick(category.name)}
               >
                 <CardContent className="p-6 text-center">
@@ -172,26 +186,46 @@ export function UserDashboardPage() {
         </div>
       </section>
 
-      {/* Recommended for You */}
-      <section className="py-16 bg-secondary/30">
+      {/* Recipes Section */}
+      <section id="recipes-section" className="py-16 bg-secondary/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h2 className="text-3xl font-bold">Recommended for You</h2>
-              <p className="text-muted-foreground mt-2">Personalized recipes based on your taste</p>
+              <h2 className="text-3xl font-bold">
+                {selectedCategory ? `${selectedCategory} Recipes` : "Recommended for You"}
+              </h2>
+              <p className="text-muted-foreground mt-2">
+                {selectedCategory
+                  ? `${displayedRecipes.length} recipe${displayedRecipes.length !== 1 ? "s" : ""} found`
+                  : "Personalized recipes based on your taste"}
+              </p>
             </div>
-            <Link to="/recipes">
-              <Button variant="outline">View All Recipes</Button>
-            </Link>
+            <div className="flex gap-2">
+              {selectedCategory && (
+                <Button variant="outline" onClick={() => setSelectedCategory(null)}>
+                  <X className="h-4 w-4 mr-2" /> Clear
+                </Button>
+              )}
+              <Link to="/recipes">
+                <Button variant="outline">View All Recipes</Button>
+              </Link>
+            </div>
           </div>
 
           {loading ? (
             <p className="text-muted-foreground">Loading recipes...</p>
-          ) : recommendedRecipes.length === 0 ? (
-            <p className="text-muted-foreground">No approved recipes yet.</p>
+          ) : displayedRecipes.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground text-lg mb-4">
+                No {selectedCategory} recipes found yet.
+              </p>
+              <Button variant="outline" onClick={() => setSelectedCategory(null)}>
+                Show All Recipes
+              </Button>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {recommendedRecipes.map((recipe) => (
+              {displayedRecipes.map((recipe) => (
                 <Link key={recipe._id} to={`/recipes/${recipe._id}`}>
                   <Card className="h-full hover:shadow-xl transition-all hover:-translate-y-1 overflow-hidden">
                     <div className="aspect-video relative overflow-hidden">
@@ -222,13 +256,11 @@ export function UserDashboardPage() {
                           <Clock className="h-4 w-4 text-muted-foreground" />
                           {recipe.cookingTime} mins
                         </span>
-                        <Badge
-                          variant={
-                            recipe.difficulty === "Easy" ? "secondary"
-                            : recipe.difficulty === "Medium" ? "default"
-                            : "destructive"
-                          }
-                        >
+                        <Badge variant={
+                          recipe.difficulty === "Easy" ? "secondary"
+                          : recipe.difficulty === "Medium" ? "default"
+                          : "destructive"
+                        }>
                           {recipe.difficulty}
                         </Badge>
                       </div>

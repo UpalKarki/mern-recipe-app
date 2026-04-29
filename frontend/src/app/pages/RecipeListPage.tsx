@@ -32,15 +32,23 @@ export function RecipeListPage() {
   const fetchRecipes = async () => {
     setLoading(true);
     try {
-      const res = await apiGetRecipes({
-        search: search || undefined,
-        category: category || undefined,
-        difficulty: difficulty || undefined,
-      });
-      if (res.success) setRecipes(res.recipes);
-      else toast.error(res.message);
-    } catch { toast.error("Could not connect to server"); }
-    finally { setLoading(false); }
+      const params: Record<string, string> = {};
+      if (search) params.search = search;
+      if (category) params.category = category;
+      if (difficulty) params.difficulty = difficulty;
+      
+      const res = await apiGetRecipes(params);
+      if (res.success) {
+        setRecipes(res.recipes);
+      } else {
+        toast.error(res.message);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not connect to server");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchRecipes(); }, [category, difficulty]);

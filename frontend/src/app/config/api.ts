@@ -43,6 +43,11 @@ export const apiUpdateProfile = async (data: { name?: string; bio?: string; prof
   return res.json();
 };
 
+export const apiGetMyReviews = async () => {
+  const res = await fetch(`${BASE_URL}/auth/my-reviews`, { headers: authHeaders() });
+  return res.json();
+};
+
 // ── RECIPES ────────────────────────────────────────
 
 export const apiGetRecipes = async (params?: { category?: string; difficulty?: string; search?: string }) => {

@@ -3,7 +3,7 @@ import { Clock, ChefHat, Star, Bookmark, Settings, Mail } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
+import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
@@ -12,32 +12,31 @@ import { Label } from "../components/ui/label";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import { getCurrentUser, setCurrentUser } from "../config/demoCredentials";
 import { useState, useEffect } from "react";
-import { apiGetMyBookmarks, apiUpdateProfile } from "../config/api";
+import { apiGetMyBookmarks, apiUpdateProfile, apiGetMyReviews } from "../config/api";
 import { toast } from "sonner";
 
 export function UserProfilePage() {
   const currentUser = getCurrentUser();
 
-  // ── REAL API STATE ─────────────────────────────────────────────────────────
   const [bookmarks, setBookmarks] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
   const [loadingBookmarks, setLoadingBookmarks] = useState(true);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editBio, setEditBio] = useState(currentUser?.bio || "");
 
-  // Fetch real bookmarks from backend on mount
   useEffect(() => {
     apiGetMyBookmarks()
       .then((res) => { if (res.success) setBookmarks(res.bookmarks); })
       .finally(() => setLoadingBookmarks(false));
-  }, []);
-  // ──────────────────────────────────────────────────────────────────────────
 
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editBio, setEditBio] = useState(currentUser?.bio || "");
+    apiGetMyReviews()
+      .then((res) => { if (res.success) setReviews(res.reviews); });
+  }, []);
 
   const handleSaveProfile = async () => {
     try {
       const res = await apiUpdateProfile({ bio: editBio });
       if (res.success) {
-        // Keep localStorage in sync so the header still shows the right name
         const updated = { ...currentUser, bio: editBio };
         setCurrentUser(updated as any);
         setIsEditDialogOpen(false);
@@ -56,16 +55,14 @@ export function UserProfilePage() {
     bio: currentUser?.bio || "Food enthusiast exploring delicious recipes from around the world.",
     joinedDate: "January 2026",
     stats: {
-      // Real count from API
       savedRecipes: loadingBookmarks ? "..." : bookmarks.length,
-      // Reviews count kept as placeholder — no reviews API endpoint for users yet
-      reviews: "—",
+      reviews: reviews.length,
     },
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Profile Header — IDENTICAL to original */}
+      {/* Profile Header */}
       <div className="bg-gradient-to-br from-primary/10 to-accent/10 border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
@@ -91,7 +88,7 @@ export function UserProfilePage() {
             </Button>
           </div>
 
-          {/* Stats — IDENTICAL layout, real savedRecipes count */}
+          {/* Stats */}
           <div className="grid grid-cols-2 gap-4 mt-8 max-w-md">
             <Card>
               <CardContent className="p-4 text-center">
@@ -113,7 +110,7 @@ export function UserProfilePage() {
         </div>
       </div>
 
-      {/* Content Tabs — IDENTICAL layout */}
+      {/* Content Tabs */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs defaultValue="saved" className="w-full">
           <TabsList className="mb-8">
@@ -121,7 +118,7 @@ export function UserProfilePage() {
             <TabsTrigger value="reviews">My Reviews</TabsTrigger>
           </TabsList>
 
-          {/* Saved Recipes Tab — real data from API */}
+          {/* Saved Recipes Tab */}
           <TabsContent value="saved">
             {loadingBookmarks ? (
               <Card>
@@ -143,7 +140,6 @@ export function UserProfilePage() {
                 </CardContent>
               </Card>
             ) : (
-              // IDENTICAL card grid — just using real bookmark data
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {bookmarks.map((bm) => {
                   const recipe = bm.recipe;
@@ -186,52 +182,73 @@ export function UserProfilePage() {
             )}
           </TabsContent>
 
-          {/* Reviews Tab — IDENTICAL empty state */}
+          {/* Reviews Tab — now shows real reviews */}
           <TabsContent value="reviews">
-            <Card>
-              <CardContent className="p-12 text-center">
-                <Star className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-xl font-semibold mb-2">No reviews yet</h3>
-                <p className="text-muted-foreground mb-6">
-                  Try some recipes and share your experience!
-                </p>
-                <Link to="/recipes">
-                  <Button>Browse Recipes</Button>
-                </Link>
-              </CardContent>
-            </Card>
+            {reviews.length === 0 ? (
+              <Card>
+                <CardContent className="p-12 text-center">
+                  <Star className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-xl font-semibold mb-2">No reviews yet</h3>
+                  <p className="text-muted-foreground mb-6">
+                    Try some recipes and share your experience!
+                  </p>
+                  <Link to="/recipes">
+                    <Button>Browse Recipes</Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {reviews.map((review) => (
+                  <Link key={review._id} to={`/recipes/${review.recipe?._id}`}>
+                    <Card className="hover:shadow-md transition-all">
+                      <CardContent className="p-5 flex gap-4">
+                        <div className="w-20 h-20 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+                          {review.recipe?.image
+                            ? <img src={review.recipe.image} alt={review.recipe.title} className="w-full h-full object-cover" />
+                            : <div className="w-full h-full flex items-center justify-center text-2xl">🍽️</div>}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between mb-1">
+                            <h3 className="font-semibold">{review.recipe?.title}</h3>
+                            <Badge variant="secondary">{review.recipe?.category}</Badge>
+                          </div>
+                          <div className="flex mb-2">
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <Star key={s} className={`h-4 w-4 ${s <= review.rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`} />
+                            ))}
+                          </div>
+                          <p className="text-sm text-muted-foreground">{review.comment}</p>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            {new Date(review.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* Edit Profile Dialog — IDENTICAL layout, real save */}
+      {/* Edit Profile Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Profile</DialogTitle>
-            <DialogDescription>
-              Update your profile information
-            </DialogDescription>
+            <DialogDescription>Update your profile information</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                value={userData.name}
-                disabled
-                className="bg-muted"
-              />
+              <Input id="name" value={userData.name} disabled className="bg-muted" />
               <p className="text-xs text-muted-foreground">Name cannot be changed</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                value={userData.email}
-                disabled
-                className="bg-muted"
-              />
+              <Input id="email" value={userData.email} disabled className="bg-muted" />
               <p className="text-xs text-muted-foreground">Email cannot be changed</p>
             </div>
             <div className="space-y-2">
@@ -246,9 +263,7 @@ export function UserProfilePage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSaveProfile}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>

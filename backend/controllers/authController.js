@@ -99,3 +99,15 @@ exports.updateProfile = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+exports.getMyReviews = async (req, res) => {
+  try {
+    const Review = require('../models/Review');
+    const reviews = await Review.find({ user: req.user._id })
+      .populate('recipe', 'title image category')
+      .sort({ createdAt: -1 });
+    res.status(200).json({ success: true, reviews });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
